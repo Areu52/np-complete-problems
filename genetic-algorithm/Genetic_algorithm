@@ -1,0 +1,237 @@
+#include <iostream>
+#include <vector>
+#include <algorithm> // Для сортировки
+#include <fstream>   // Для работы с файлами
+#include <ctime>     // Для генерации случайных чисел
+
+using namespace std;
+
+struct Item
+{
+    int weight;
+    int value;
+};
+
+struct Individual
+{
+    vector<int> chromosome; // Хромосома, представлена как вектор 0/1 для каждого предмета
+    int fitness;            // Приспособленность (ценность) особи
+};
+
+struct GAResult
+{
+    int bestValue;               // Лучшая найденная ценность
+    vector<int> bestChromosome;  // Хромосома лучшей особи
+};
+
+// Функция для генетического алгоритма
+GAResult geneticKnapsack(const vector<Item> &items, int capacity)
+{
+    const int POP_SIZE = 50;      // Размер популяции
+    const int MAX_GEN = 200;      // Количество поколений
+    const double MUTATION_RATE = 0.05;  // Вероятность мутации
+
+    int n = items.size();  // Количество предметов
+    vector<Individual> population(POP_SIZE);
+
+    // Инициализация популяции
+    for (int i = 0; i < POP_SIZE; i++)
+    {
+        population[i].chromosome.resize(n);
+        for (int j = 0; j < n; j++)
+        {
+            population[i].chromosome[j] = rand() % 2;  // Случайное 0 или 1
+        }
+        // Вычисляем приспособленность для особи
+        int totalWeight = 0;
+        int totalValue = 0;
+        for (size_t k = 0; k < population[i].chromosome.size(); k++)
+        {
+            if (population[i].chromosome[k] == 1)
+            {
+                totalWeight += items[k].weight;
+                totalValue += items[k].value;
+            }
+        }
+        if (totalWeight > capacity)
+            population[i].fitness = 0;  // Если вес больше вместимости рюкзака
+        else
+            population[i].fitness = totalValue;
+    }
+
+    // Основной цикл по поколениям
+    for (int gen = 0; gen < MAX_GEN; gen++)
+    {
+        vector<Individual> newPopulation;  // Новая популяция
+
+        // Элитизм: сохраняем несколько лучших особей
+        sort(population.begin(), population.end(), [](const Individual &a, const Individual &b) {
+            return a.fitness > b.fitness;
+        });
+
+        // Добавляем лучших особей в новую популяцию
+        newPopulation.push_back(population[0]);  // Лучшая особь
+        newPopulation.push_back(population[1]);  // Вторая лучшая особь
+
+        // Формируем новое поколение
+        while (newPopulation.size() < POP_SIZE)
+        {
+            // Турнирная селекция
+            int tournamentSize = 3;  // Размер турнира (выбираем 3 кандидата)
+            vector<Individual> candidates;
+            for (int i = 0; i < tournamentSize; i++)
+            {
+                candidates.push_back(population[rand() % population.size()]);
+            }
+
+            // Находим лучшего из кандидатов
+            Individual parent1 = candidates[0];
+            for (const auto &candidate : candidates)
+            {
+                if (candidate.fitness > parent1.fitness)
+                {
+                    parent1 = candidate;
+                }
+            }
+
+            candidates.clear();
+            for (int i = 0; i < tournamentSize; i++)
+            {
+                candidates.push_back(population[rand() % population.size()]);
+            }
+
+            // Находим лучшего из оставшихся кандидатов
+            Individual parent2 = candidates[0];
+            for (const auto &candidate : candidates)
+            {
+                if (candidate.fitness > parent2.fitness)
+                {
+                    parent2 = candidate;
+                }
+            }
+
+            // Выполняем кроссовер
+            int size = parent1.chromosome.size();
+            int point = rand() % (size - 1);  // Точка кроссовера (не на конце)
+
+            // Меняем гены после точки кроссовера у обоих родителей
+            for (int i = point; i < size; i++)
+            {
+                swap(parent1.chromosome[i], parent2.chromosome[i]);
+            }
+
+            // Мутация
+            for (size_t i = 0; i < parent1.chromosome.size(); i++)
+            {
+                if ((double)rand() / RAND_MAX < MUTATION_RATE)
+                {
+                    parent1.chromosome[i] = 1 - parent1.chromosome[i];
+                }
+            }
+
+            for (size_t i = 0; i < parent2.chromosome.size(); i++)
+            {
+                if ((double)rand() / RAND_MAX < MUTATION_RATE)
+                {
+                    parent2.chromosome[i] = 1 - parent2.chromosome[i];
+                }
+            }
+
+            // Вычисляем приспособленность для новых особей
+            int totalWeight1 = 0, totalValue1 = 0;
+            for (size_t i = 0; i < parent1.chromosome.size(); i++)
+            {
+                if (parent1.chromosome[i] == 1)
+                {
+                    totalWeight1 += items[i].weight;
+                    totalValue1 += items[i].value;
+                }
+            }
+            if (totalWeight1 > capacity)
+                parent1.fitness = 0;
+            else
+                parent1.fitness = totalValue1;
+
+            int totalWeight2 = 0, totalValue2 = 0;
+            for (size_t i = 0; i < parent2.chromosome.size(); i++)
+            {
+                if (parent2.chromosome[i] == 1)
+                {
+                    totalWeight2 += items[i].weight;
+                    totalValue2 += items[i].value;
+                }
+            }
+            if (totalWeight2 > capacity)
+                parent2.fitness = 0;
+            else
+                parent2.fitness = totalValue2;
+
+            newPopulation.push_back(parent1);  // Добавляем первого родителя в новую популяцию
+            if (newPopulation.size() < POP_SIZE)
+            {
+                newPopulation.push_back(parent2);  // Добавляем второго родителя в новую популяцию
+            }
+        }
+
+        population = newPopulation;  // Заменяем старую популяцию на новую
+    }
+
+    // Возвращаем результат
+    GAResult res;
+    res.bestValue = population[0].fitness;
+    res.bestChromosome = population[0].chromosome;
+    return res;
+}
+
+int main()
+{
+    // Считывание данных из файла
+    ifstream input("ks_19_0");
+
+    if (!input)
+    {
+        cerr << "Error: The file didn't open" << endl;
+        return -1;
+    }
+
+    srand((unsigned)time(nullptr));  // Инициализация генератора случайных чисел
+
+    int N, CAP;
+    input >> N >> CAP;
+
+    vector<Item> items(N);
+
+    for (int i = 0; i < N; i++)
+    {
+        input >> items[i].weight >> items[i].value;  // Чтение веса и ценности предметов
+    }
+
+    input.close();  // Закрываем файл
+
+    GAResult gaRes = geneticKnapsack(items, CAP);  // Запуск генетического алгоритма
+
+    int totalWeight = 0;
+    for (int i = 0; i < N; i++)
+    {
+        if (gaRes.bestChromosome[i] == 1)
+        {
+            totalWeight += items[i].weight;
+        }
+    }
+
+    // Вывод результатов в консоль
+    cout << "Best Profit: " << gaRes.bestValue << endl;
+    cout << "Total Weight: " << totalWeight << endl;
+
+    cout << "Items to include: ";
+    for (int i = 0; i < N; i++)
+    {
+        if (gaRes.bestChromosome[i] == 1)
+        {
+            cout << i + 1 << " ";  // Выводим индекс предмета (с 1)
+        }
+    }
+    cout << endl;
+
+    return 0;
+}

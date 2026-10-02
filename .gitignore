@@ -1,0 +1,8 @@
+/*.zip
+**/build/
+**/cmake-build-*/
+**/.vs/
+**/.idea/
+**/*.obj
+**/*.o
+**/*.exe
